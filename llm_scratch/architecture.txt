@@ -1,0 +1,12 @@
+TinyGPT(
+ ├─ TokenEmbedding
+ ├─ PositionalEmbedding
+ ├─ DecoderBlock × N   (you choose N = 1 or 2)
+ │   ├─ LayerNorm
+ │   ├─ MultiHeadSelfAttention
+ │   │   ├─ Linear W_q, W_k, W_v
+ │   │   └─ Causal Mask
+ │   ├─ Linear W_o
+ │   └─ FeedForward (2 layers, GELU)
+ └─ Output Projection (to vocab)
+)
