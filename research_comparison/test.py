@@ -1,7 +1,11 @@
 import requests
 import numpy as np
+from openai import OpenAI
 
 url = "http://127.0.0.1:8033/v1/chat/completions"
+OPENAI_API_KEY = "YOUR_OPENAI_API_KEY"
+
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 data = {
     "model": "Qwen3-4B-GGUF.Q4_K_M",
@@ -13,7 +17,7 @@ data = {
 
 response = requests.post(url, json=data)
 logprobs_example = response.json()["choices"][0]["logprobs"]['content']
-# print(response.json()["choices"][0]["message"]["content"])
+text = response.json()["choices"][0]["message"]["content"]
 
 prompt_texts = [
     "Write a short fantasy story about a dragon and a wizard.",
