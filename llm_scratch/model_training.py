@@ -1,6 +1,6 @@
 import torch
 from final_model import TinyGPT
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import torch.nn.functional as F
 import psutil
 from pynvml import *
@@ -49,13 +49,13 @@ def get_cpu_utilization():
     return psutil.cpu_percent()
 
 # Character-level tokenizer
-chars = sorted(list(set(text)))
-stoi = {ch: i for i, ch in enumerate(chars)}
-itos = {i: ch for ch, i in stoi.items()}
-vocab_size = len(stoi)
-tokens = [stoi[c] for c in text]
-device = "cuda" if torch.cuda.is_available() else "cpu"
-print("device: ", device)
+# chars = sorted(list(set(text)))
+# stoi = {ch: i for i, ch in enumerate(chars)}
+# itos = {i: ch for ch, i in stoi.items()}
+# vocab_size = len(stoi)
+# tokens = [stoi[c] for c in text]
+# device = "cuda" if torch.cuda.is_available() else "cpu"
+# print("device: ", device)
 
 # print("vocab size: ", vocab_size)
 # print("number of tokens: ", len(tokens))
@@ -95,8 +95,8 @@ def tokenize_with_tiktoken(text, model_name="gpt2"):
     return token_ids, tokenizer
 
 # Example usage:
-# tokens, tokenizer = tokenize_with_tiktoken(text)
-# vocab_size = tokenizer.n_vocab
+tokens, tokenizer = tokenize_with_tiktoken(text)
+vocab_size = tokenizer.n_vocab
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print("device: ", device)
@@ -124,7 +124,7 @@ learning_rate = 0.003
 # Create a dictionary to store run information
 run_info = {
     'run_id': run_id,
-    'tokenizer_type': 'character',  # or 'char' if you switch back
+    'tokenizer_type': 'tiktoken',  # or 'char' if you switch back
     'embed_dim': embed_dim,
     'num_heads': num_heads,
     'num_layers': num_layers,
@@ -205,6 +205,10 @@ for epoch in range(epochs):
             if not file_exists:
                 writer.writeheader()  # Write header only if file doesn't exist
             writer.writerow(run_info)
+
+end_time = time.time()
+total_time = end_time - start_time
+print("Time Taken:", total_time)
 
 # plt.figure()
 # plt.plot(losses)
