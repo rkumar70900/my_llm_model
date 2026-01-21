@@ -24,6 +24,9 @@ print(f"Starting training run: {run_id}")
 # Create results directory if it doesn't exist
 os.makedirs("training_runs", exist_ok=True)
 
+device = "cuda" if torch.cuda.is_available() else "cpu"
+print("device: ", device)
+
 
 # reading dataset
 try:
@@ -49,57 +52,38 @@ def get_cpu_utilization():
     return psutil.cpu_percent()
 
 # Character-level tokenizer
-# chars = sorted(list(set(text)))
-# stoi = {ch: i for i, ch in enumerate(chars)}
-# itos = {i: ch for ch, i in stoi.items()}
-# vocab_size = len(stoi)
-# tokens = [stoi[c] for c in text]
-# device = "cuda" if torch.cuda.is_available() else "cpu"
-# print("device: ", device)
-
-# print("vocab size: ", vocab_size)
-# print("number of tokens: ", len(tokens))
+def tokenize_with_chars(text):
+    chars = sorted(list(set(text)))
+    stoi = {ch: i for i, ch in enumerate(chars)}
+    itos = {i: ch for ch, i in stoi.items()}
+    vocab_size = len(stoi)
+    tokens = [stoi[c] for c in text]
+    return tokens, stoi, itos, vocab_size
 
 # word level tokenizer
-# def simple_tokenize(text):
-#     # Split on whitespace and keep only words with length > 1
-#     words = re.findall(r'\b\w+\b', text.lower())
-#     return words
+def simple_tokenize(text):
+    # Split on whitespace and keep only words with length > 1
+    words = re.findall(r'\b\w+\b', text.lower())
+    return words
 
-# # Tokenize the text into words
-# words = simple_tokenize(text)
-# vocab = sorted(list(set(words)))
-# stoi = {word: i for i, word in enumerate(vocab)}
-# itos = {i: word for i, word in enumerate(vocab)}
-# vocab_size = len(vocab)
-
-# # Convert text to token IDs
-# tokens = [stoi[word] for word in words]
+# Tokenize the text into words
+def tokenize_with_words(text):
+    words = simple_tokenize(text)
+    vocab = sorted(list(set(words)))
+    stoi = {word: i for i, word in enumerate(vocab)}
+    itos = {i: word for i, word in enumerate(vocab)}
+    vocab_size = len(vocab)
+    tokens = [stoi[word] for word in words]
+    return tokens, stoi, itos, vocab_size
 
 def tokenize_with_tiktoken(text, model_name="gpt2"):
-    """
-    Tokenize text using tiktoken's tokenizer.
-    
-    Args:
-        text (str): Input text to tokenize
-        model_name (str): Name of the tokenizer model to use (default: "gpt2")
-        
-    Returns:
-        tuple: (token_ids, tokenizer)
-            - token_ids: List of token IDs
-            - tokenizer: The tiktoken tokenizer instance
-    """
     import tiktoken
     tokenizer = tiktoken.get_encoding(model_name)
     token_ids = tokenizer.encode_ordinary(text)
     return token_ids, tokenizer
 
-# Example usage:
 tokens, tokenizer = tokenize_with_tiktoken(text)
-vocab_size = tokenizer.n_vocab
-
-device = "cuda" if torch.cuda.is_available() else "cpu"
-print("device: ", device)
+vocab_size = tokenizer.n_vocab  # Get the vocabulary size
 
 print("vocab size: ", vocab_size)
 print("number of tokens: ", len(tokens))
