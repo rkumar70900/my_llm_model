@@ -1,3 +1,4 @@
 data/
 llm_scratch/__pycache__
 old/
+.DS_Store
