@@ -21,7 +21,7 @@ config = {
     'num_heads': 8,
     'num_layers': 6,
     'train_max_seq_len': 128,  # Train on shorter sequences
-    'test_seq_lengths': [128, 256, 384, 512],  # Test on longer sequences
+    'test_seq_lengths': [32, 64, 128, 256, 384, 512],  # Test on longer sequences
     'num_test_samples': 100,
     'output_dir': 'results/rope_analysis'
 }
