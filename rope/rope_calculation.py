@@ -177,10 +177,6 @@ print(token_embeds[0, 0].detach().numpy())
 print(f"\nSecond token ('cat') embedding:")
 print(token_embeds[0, 1].detach().numpy())
 
-print("\n⚠️  IMPORTANT: At this point, these embeddings have NO position information!")
-print("   The model doesn't know 'the' is at position 0 or position 4.")
-print("   Both instances of 'the' have identical embeddings.")
-
 # ============================================================================
 # Step 3: Create Attention Heads (Q, K projections)
 # ============================================================================
@@ -218,10 +214,6 @@ print(f"  Format: (batch, num_heads, seq_len, head_dim)")
 print(f"\nHead 0 queries for all positions:")
 for pos in range(seq_len):
     print(f"  Position {pos} ('{words[pos]}'): {Q[0, 0, pos].detach().numpy()}")
-
-print("\n⚠️  STILL NO POSITION INFORMATION!")
-print("   Q and K know the content (what each token is)")
-print("   But they don't know WHERE each token is in the sequence")
 
 # ============================================================================
 # Step 4: RoPE - Precompute Rotation Frequencies
@@ -265,9 +257,6 @@ for pos in range(seq_len):
         print(f"{angle:10.4f}    ", end="")
     print()
 
-print(f"\nKey insight: Position 5 at frequency 0.1 → angle = 5 × 0.1 = 0.5 radians")
-print(f"            This angle determines how much we rotate that dimension pair")
-
 # Convert to complex exponentials (cos + i*sin)
 freqs_cis = torch.polar(torch.ones_like(rotation_angles), rotation_angles)
 
@@ -299,10 +288,6 @@ Q_rotated, K_rotated = apply_rotary_emb(Q, K, freqs_cis)
 print(f"\nAfter RoPE rotation:")
 print(f"  Head 0, Position 0 ('{words[0]}') Query: {Q_rotated[0, 0, 0].detach().numpy()}")
 print(f"  Head 0, Position 2 ('{words[2]}') Query: {Q_rotated[0, 0, 2].detach().numpy()}")
-
-print("\n✅ NOW THE VECTORS HAVE POSITION INFORMATION!")
-print("   Each position has been rotated by a unique angle")
-print("   Different positions → different rotations → different vectors")
 
 # ============================================================================
 # Step 6: Visualize What RoPE Does (2D Rotation)
@@ -366,7 +351,7 @@ ax2.grid(True, alpha=0.3)
 ax2.set_aspect('equal')
 
 plt.tight_layout()
-plt.savefig('/Users/raj/Documents/GitHub/my_llm_model/rope/rope_rotation_visualization.png', dpi=300, bbox_inches='tight')
+plt.savefig('./rope_rotation_visualization.png', dpi=300, bbox_inches='tight')
 print(f"\n✅ Saved visualization: rope_rotation_visualization.png")
 
 print("\nWhat you see in the plot:")
@@ -435,163 +420,5 @@ axes[1].set_xlabel('Key Positions', fontsize=11)
 axes[1].set_ylabel('Query Positions', fontsize=11)
 
 plt.tight_layout()
-plt.savefig('/Users/raj/Documents/GitHub/my_llm_model/rope/rope_attention_scores.png', dpi=300, bbox_inches='tight')
+plt.savefig('./rope_attention_scores.png', dpi=300, bbox_inches='tight')
 print(f"\n✅ Saved visualization: rope_attention_scores.png")
-
-# ============================================================================
-# Step 8: How Relative Distance is Encoded
-# ============================================================================
-
-print("\n" + "="*80)
-print("STEP 8: RELATIVE DISTANCE ENCODING")
-print("="*80)
-
-print("\n🎯 THE KEY INSIGHT: RoPE encodes RELATIVE position in attention scores")
-
-# Let's examine how attention scores relate to relative distance
-print("\nLet's look at a specific example:")
-print(f"  Query position 2 ('{words[2]}') attending to all key positions")
-print(f"\n  Relative distances from position 2:")
-
-query_pos = 2
-print(f"\n  Key Position | Word  | Relative Distance | Attention Score (RoPE)")
-print(f"  {'-'*70}")
-for key_pos in range(seq_len):
-    rel_dist = key_pos - query_pos
-    score = scores_rope_h0[query_pos, key_pos]
-    print(f"       {key_pos}       | {words[key_pos]:>5s} |       {rel_dist:+3d}         |      {score:.4f}")
-
-print("\n💡 Key observation:")
-print("   Positions that are the SAME RELATIVE DISTANCE should have similar scores")
-print("   This is exactly what RoPE achieves through rotation!")
-
-# Demonstrate with another query position
-print(f"\n  Now let's look at Query position 4 ('{words[4]}'):")
-query_pos = 4
-print(f"\n  Key Position | Word  | Relative Distance | Attention Score (RoPE)")
-print(f"  {'-'*70}")
-for key_pos in range(seq_len):
-    rel_dist = key_pos - query_pos
-    score = scores_rope_h0[query_pos, key_pos]
-    print(f"       {key_pos}       | {words[key_pos]:>5s} |       {rel_dist:+3d}         |      {score:.4f}")
-
-# ============================================================================
-# Step 9: Mathematical Explanation
-# ============================================================================
-
-print("\n" + "="*80)
-print("STEP 9: THE MATHEMATICAL FOUNDATION")
-print("="*80)
-
-print("\nHow does rotation encode relative distance?")
-print("\nMathematically, when computing attention between position m and n:")
-print("\n  Without RoPE:")
-print("    score = Q_m · K_n")
-print("    (Just content similarity, no position info)")
-print("\n  With RoPE:")
-print("    score = R(θm)Q_m · R(θn)K_n")
-print("    score = Q_m · K_n · cos(θ(m-n))")
-print("           └─content─┘   └relative distance┘")
-print("\nThe cos(θ(m-n)) term appears naturally from the rotation!")
-
-# Demonstrate this mathematically
-print("\n" + "="*80)
-print("CONCRETE EXAMPLE:")
-print("="*80)
-
-pos_m = 1
-pos_n = 4
-print(f"\nComparing position {pos_m} ('{words[pos_m]}') with position {pos_n} ('{words[pos_n]}')")
-print(f"Relative distance: {pos_n - pos_m}")
-
-# Get the rotation angles
-angle_m = rotation_angles[pos_m, 0].item()  # First frequency only for simplicity
-angle_n = rotation_angles[pos_n, 0].item()
-angle_diff = angle_n - angle_m
-
-print(f"\nRotation angles (first frequency):")
-print(f"  Position {pos_m}: θ × {pos_m} = {angle_m:.4f} radians")
-print(f"  Position {pos_n}: θ × {pos_n} = {angle_n:.4f} radians")
-print(f"  Difference: {angle_diff:.4f} radians")
-print(f"\nThis difference encodes their relative distance!")
-
-# Show that this difference depends only on (n-m), not absolute positions
-print("\n" + "="*80)
-print("GENERALIZATION:")
-print("="*80)
-
-print("\nRoPE ensures that attention between ANY two positions separated by")
-print(f"distance d will have the same relative encoding:")
-print("\nExamples of position pairs with distance = 3:")
-
-for start_pos in range(seq_len - 3):
-    end_pos = start_pos + 3
-    angle_start = rotation_angles[start_pos, 0].item()
-    angle_end = rotation_angles[end_pos, 0].item()
-    angle_diff = angle_end - angle_start
-    print(f"  Positions ({start_pos}, {end_pos}): angle diff = {angle_diff:.4f} radians")
-
-print("\n✅ Notice: The angle difference is THE SAME for all pairs with distance 3!")
-print("   This is how RoPE naturally encodes RELATIVE position")
-
-# ============================================================================
-# Step 10: Complete Training Forward Pass Summary
-# ============================================================================
-
-print("\n" + "="*80)
-print("STEP 10: COMPLETE TRAINING FLOW WITH ROPE")
-print("="*80)
-
-print("\nHere's how position information flows through training:")
-print("\n1. INPUT: Token IDs")
-print(f"   {token_ids}")
-print("\n2. TOKEN EMBEDDING: Convert to vectors (no position yet)")
-print(f"   Shape: {token_embeds.shape}")
-print("   ⚠️  Still no position info!")
-print("\n3. ATTENTION PROJECTION: Project to Q, K, V")
-print(f"   Q shape: {Q_original.shape}")
-print(f"   K shape: {K_original.shape}")
-print("   ⚠️  Still no position info!")
-print("\n4. ROPE ROTATION: Apply position-dependent rotation")
-print(f"   Q_rotated shape: {Q_rotated.shape}")
-print(f"   K_rotated shape: {K_rotated.shape}")
-print("   ✅ NOW positions are encoded!")
-print("\n5. ATTENTION COMPUTATION: Q @ K^T")
-print(f"   Attention scores shape: {attention_scores_rope.shape}")
-print("   ✅ Scores reflect both content AND relative position!")
-print("\n6. WEIGHTED SUM: Attention @ V")
-print("   (Continue with normal transformer flow)")
-
-print("\n" + "="*80)
-print("KEY TAKEAWAYS")
-print("="*80)
-
-print("""
-1. RoPE doesn't ADD position embeddings - it ROTATES query/key vectors
-   
-2. Each position gets rotated by a unique angle: θ × position
-
-3. Multiple frequencies create multi-scale position encoding:
-   - Fast rotation → local structure
-   - Slow rotation → global structure
-
-4. Relative distance automatically appears in attention scores:
-   - score ∝ cos(θ(m-n))
-   - This depends only on distance (m-n), not absolute positions
-
-5. No learned parameters needed - it's pure mathematics!
-
-6. Works for ANY sequence length - no extrapolation problems
-
-7. The model learns to use relative position information naturally
-   through the attention mechanism
-""")
-
-print("\n" + "="*80)
-print("VISUALIZATION FILES CREATED:")
-print("="*80)
-print("\n1. rope_rotation_visualization.png")
-print("   → Shows how vectors get rotated by position")
-print("\n2. rope_attention_scores.png")
-print("   → Compares attention patterns with/without RoPE")
-print("\n" + "="*80)
