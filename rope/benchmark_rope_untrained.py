@@ -23,7 +23,7 @@ config = {
     'embed_dim': 256,
     'num_heads': 8,
     'num_layers': 6,
-    'train_max_seq_len': 4096,
+    'train_max_seq_len': 512,
     'test_seq_lengths': [32, 64, 128, 256, 512, 1024, 2048, 4096],
     'num_test_samples': 50,
     'output_dir': '/Users/raj/Documents/GitHub/my_llm_model/rope'

@@ -18,7 +18,7 @@ class Embeddings(nn.Module):
         return self.dropout(tok)               # (B, T, D)
 
 class MultiHeadAttentionKVCache(nn.Module):
-    def __init__(self, embed_dim, num_heads, dropout=0.1, max_seq_len=512):
+    def __init__(self, embed_dim, num_heads, dropout=0.1, max_seq_len=512, theta=10000.0):
         super().__init__()
         assert embed_dim % num_heads == 0
         self.num_heads = num_heads
@@ -28,11 +28,23 @@ class MultiHeadAttentionKVCache(nn.Module):
         self.W_v = nn.Linear(embed_dim, embed_dim)
         self.W_o = nn.Linear(embed_dim, embed_dim)
         self.dropout = nn.Dropout(dropout)
+        self.theta = theta  # Store theta for dynamic computation
         # Precompute RoPE frequencies for maximum sequence length
         self.register_buffer(
             "freqs_cis",
             precompute_freqs_cis(self.head_dim, max_seq_len)
         )
+        self.max_cached_len = max_seq_len
+    
+    def _extend_freqs_if_needed(self, seq_len: int):
+        """
+        Dynamically extend frequency cache if sequence is longer than cached
+        """
+        if seq_len > self.max_cached_len:
+            # Compute new frequencies for longer sequence
+            new_freqs_cis = precompute_freqs_cis(self.head_dim, seq_len, self.theta)
+            self.freqs_cis = new_freqs_cis.to(self.freqs_cis.device)
+            self.max_cached_len = seq_len
 
     def forward(self, x, kv_cache=None, use_cache=False):
         B, T, D = x.shape
@@ -51,6 +63,10 @@ class MultiHeadAttentionKVCache(nn.Module):
         if kv_cache is not None:
             K_cache, V_cache = kv_cache
             past_len = K_cache.size(2)
+        
+        # Extend frequency cache if needed for current sequence
+        total_len = past_len + T
+        self._extend_freqs_if_needed(total_len)
         
         # Apply RoPE to Q and K_new
         # Extract the relevant frequency range based on current positions
