@@ -29,7 +29,7 @@ class MultiHeadAttention(nn.Module):
         self.W_o = nn.Linear(embed_dim, embed_dim)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x):
+    def forward(self, x, mask=None):
         B, T, D = x.shape
 
         Q = self.W_q(x)  # (B,T,D)
@@ -43,8 +43,8 @@ class MultiHeadAttention(nn.Module):
 
         att = (Q @ K.transpose(-2, -1)) / math.sqrt(self.head_dim)
 
-        mask = torch.triu(torch.ones(T, T), diagonal=1).bool().to(x.device)
-        att = att.masked_fill(mask, float('-inf'))
+        if mask is not None:
+            att = att.masked_fill(mask, float('-inf'))
 
         att = F.softmax(att, dim=-1)
 
@@ -52,6 +52,111 @@ class MultiHeadAttention(nn.Module):
         out = out.transpose(1,2).reshape(B,T,D)  # back to (B,T,D)
 
         return self.dropout(self.W_o(out))
+
+class GroupedQueryAttention(nn.Module):
+    def __init__(self, embed_dim, num_heads, num_groups, dropout=0.1):
+        super().__init__()
+        assert embed_dim % num_heads == 0
+        self.num_heads = num_heads
+        self.num_groups = num_groups
+        self.head_dim = embed_dim // num_heads
+
+        self.W_q = nn.Linear(embed_dim, embed_dim)
+        self.W_k = nn.Linear(embed_dim, num_groups * self.head_dim)
+        self.W_v = nn.Linear(embed_dim, num_groups * self.head_dim)
+        self.W_o = nn.Linear(embed_dim, embed_dim)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x, kv_cache=None, use_cache=False, mask=None):
+        B, T, D = x.shape
+
+        Q = self.W_q(x)  # (B,T,D)
+        K_new = self.W_k(x)
+        V_new = self.W_v(x)
+
+        # reshape into heads
+        Q = Q.view(B, T, self.num_heads, self.head_dim).transpose(1, 2) # (B,H,T,hd)
+        K_new = K_new.view(B, T, self.num_groups, self.head_dim).transpose(1, 2)
+        V_new = V_new.view(B, T, self.num_groups, self.head_dim).transpose(1, 2)
+
+        past_len = 0
+        if kv_cache is not None:
+            K_cache, V_cache = kv_cache
+            past_len = K_cache.size(2)
+            K = torch.cat([K_cache, K_new], dim=2)
+            V = torch.cat([V_cache, V_new], dim=2)
+        else:
+            K = K_new
+            V = V_new
+
+        repeats = self.num_heads // self.num_groups
+        K = K.repeat_interleave(repeats, dim=1)
+        V = V.repeat_interleave(repeats, dim=1)
+
+        att = (Q @ K.transpose(-2, -1)) / math.sqrt(self.head_dim)
+
+        if mask is not None:
+            att = att.masked_fill(mask, float('-inf'))
+
+        att = F.softmax(att, dim=-1)
+
+        out = att @ V  # (B,H,T,hd)
+        out = out.transpose(1,2).reshape(B,T,D)  # back to (B,T,D)
+
+        out = self.dropout(self.W_o(out))
+        new_kv_cache = (K_new, V_new) if use_cache else None
+
+        return out, new_kv_cache
+
+class MultiQueryAttention(nn.Module):
+    def __init__(self, embed_dim, num_heads, dropout=0.1):
+        super().__init__()
+        assert embed_dim % num_heads == 0
+        self.num_heads = num_heads
+        self.head_dim = embed_dim // num_heads
+
+        self.W_q = nn.Linear(embed_dim, embed_dim)
+        self.W_k = nn.Linear(embed_dim, self.head_dim)
+        self.W_v = nn.Linear(embed_dim, self.head_dim)
+        self.W_o = nn.Linear(embed_dim, embed_dim)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x, kv_cache=None, use_cache=False, mask=None):
+        B, T, D = x.shape
+
+        Q = self.W_q(x)  # (B,T,D)
+        K_new = self.W_k(x)
+        V_new = self.W_v(x)
+
+        # reshape into heads
+        Q = Q.view(B, T, self.num_heads, self.head_dim).transpose(1, 2) # (B,H,T,hd)
+        K_new = K_new.view(B, T, 1, self.head_dim).transpose(1, 2)
+        V_new = V_new.view(B, T, 1, self.head_dim).transpose(1, 2)
+
+        past_len = 0
+        if kv_cache is not None:
+            K_cache, V_cache = kv_cache
+            past_len = K_cache.size(2)
+            K = torch.cat([K_cache, K_new], dim=2)
+            V = torch.cat([V_cache, V_new], dim=2)
+        else:
+            K = K_new
+            V = V_new
+
+        att = (Q @ K.transpose(-2, -1)) / math.sqrt(self.head_dim)
+
+        if mask is not None:
+            att = att.masked_fill(mask, float('-inf'))
+
+        att = F.softmax(att, dim=-1)
+
+        out = att @ V  # (B,H,T,hd)
+        out = out.transpose(1,2).reshape(B,T,D)  # back to (B,T,D)
+
+        out = self.dropout(self.W_o(out))
+        new_kv_cache = (K, V) if use_cache else None
+
+        return out, new_kv_cache
 
 class MultiHeadAttentionKVCache(nn.Module):
     def __init__(self, embed_dim, num_heads, dropout=0.1):
@@ -66,7 +171,7 @@ class MultiHeadAttentionKVCache(nn.Module):
         self.W_o = nn.Linear(embed_dim, embed_dim)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x, kv_cache=None, use_cache=False):
+    def forward(self, x, kv_cache=None, use_cache=False, mask=None):
         B, T, D = x.shape
 
         Q = self.W_q(x)  # (B,T,D)
@@ -93,7 +198,8 @@ class MultiHeadAttentionKVCache(nn.Module):
         q_pos = torch.arange(T, device=x.device).unsqueeze(1) + past_len
         k_pos = torch.arange(T_total, device=x.device).unsqueeze(0)
         mask = k_pos > q_pos
-        att = att.masked_fill(mask.unsqueeze(0).unsqueeze(0), float('-inf'))
+        if mask is not None:
+            att = att.masked_fill(mask.unsqueeze(0).unsqueeze(0), float('-inf'))
 
         att = F.softmax(att, dim=-1)
 
@@ -120,12 +226,12 @@ class DecoderBlock(nn.Module):
         ff_dim = 4 * embed_dim
         self.ln1 = nn.LayerNorm(embed_dim)
         self.ln2 = nn.LayerNorm(embed_dim)
-        self.attn = MultiHeadAttentionKVCache(embed_dim, num_heads, dropout)
+        self.attn = MultiQueryAttention(embed_dim, num_heads, dropout)
         self.ff = FeedForward(embed_dim, ff_dim, dropout)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x, kv_cache=None, use_cache=False):
-        attn_out, new_kv_cache = self.attn(self.ln1(x), kv_cache=kv_cache, use_cache=use_cache)
+    def forward(self, x, kv_cache=None, use_cache=False, mask=None):
+        attn_out, new_kv_cache = self.attn(self.ln1(x), kv_cache=kv_cache, use_cache=use_cache, mask=mask)
         x = x + self.dropout(attn_out)
         x = x + self.dropout(self.ff(self.ln2(x)))
         if use_cache:
